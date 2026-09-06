@@ -1,36 +1,51 @@
-#include <Servo.h>
+#include <ESP32Servo.h>
 
-Servo servo;
+Servo servoMerah;
+Servo servoKuning;
 
-const int servoPin = 9;
-const int buttonPin = 2;
+const int servoPin1 = 13;   // servo merah
+const int buttonPin1 = 14;  // tombol merah
 
-bool fokus = false;
-bool tombolSebelumnya = HIGH;
+const int servoPin2 = 27;   // servo kuning
+const int buttonPin2 = 26;  // tombol kuning
 
 void setup() {
-  servo.attach(servoPin);
-  pinMode(buttonPin, INPUT_PULLUP);
+  Serial.begin(115200);
 
-  // Posisi awal = TERSEDIA
-  servo.write(0);
+  // WAJIB di versi ESP32 core terbaru, sebelum attach()
+  ESP32PWM::allocateTimer(0);
+  ESP32PWM::allocateTimer(1);  // servo kedua butuh timer terpisah
+
+  pinMode(buttonPin1, INPUT_PULLUP);
+  pinMode(buttonPin2, INPUT_PULLUP);
+
+  servoMerah.setPeriodHertz(50);
+  servoMerah.attach(servoPin1, 500, 2400);
+  servoMerah.write(0);
+
+  servoKuning.setPeriodHertz(50);
+  servoKuning.attach(servoPin2, 500, 2400);
+  servoKuning.write(0);
+
+  Serial.println("Sistem siap! (2 servo, 2 button)");
 }
 
 void loop() {
-  bool tombolSekarang = digitalRead(buttonPin);
-
-  if (tombolSebelumnya == HIGH && tombolSekarang == LOW) {
-
-    fokus = !fokus;
-
-    if (fokus) {
-      servo.write(90);
-    } else {
-      servo.write(0);
-    }
-
-    delay(300);
+  // Tombol merah -> servo merah
+  if (digitalRead(buttonPin1) == LOW) {
+    servoMerah.write(90);
+    Serial.println("Tombol merah ditekan!");
+  } else {
+    servoMerah.write(0);
   }
 
-  tombolSebelumnya = tombolSekarang;
+  // Tombol kuning -> servo kuning
+  if (digitalRead(buttonPin2) == LOW) {
+    servoKuning.write(90);
+    Serial.println("Tombol kuning ditekan!");
+  } else {
+    servoKuning.write(0);
+  }
+
+  delay(50);
 }
