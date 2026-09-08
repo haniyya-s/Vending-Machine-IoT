@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Kontrol 2 Servo - MQTT (Pulse)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.3.4/mqtt.min.js"></script>
+<style>
+  body {
+    font-family: -apple-system, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    margin: 0;
+    background: #f4f4f4;
+  }
+  h1 { color: #333; margin-bottom: 5px; }
+  #status { margin-bottom: 25px; color: #666; font-size: 14px; }
+  .card {
+    background: white;
+    border-radius: 14px;
+    padding: 20px 30px;
+    margin: 10px;
+    width: 220px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+  .card h2 { margin: 0 0 15px 0; font-size: 18px; }
+  .pulse-btn {
+    width: 100%;
+    padding: 16px;
+    font-size: 16px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    color: white;
+    transition: transform 0.1s, background 0.15s;
+  }
+  .pulse-btn:active { transform: scale(0.96); }
+  .merah  { background: #dc2626; }
+  .kuning { background: #eab308; }
+  .sent   { background: #16a34a !important; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+  <h1>Kontrol Servo</h1>
+  <div id="status">Menghubungkan ke broker...</div>
+
+  <div class="card">
+    <h2>Servo Merah</h2>
+    <button id="btnMerah" class="pulse-btn merah" disabled>Tekan (90&deg; lalu otomatis balik)</button>
+  </div>
+
+  <div class="card">
+    <h2>Servo Kuning</h2>
+    <button id="btnKuning" class="pulse-btn kuning" disabled>Tekan (90&deg; lalu otomatis balik)</button>
+  </div>
+
+<script>
+  // HARUS SAMA dengan topic di kode ESP32
+  const TOPIC_MERAH  = "servo-kontrol/servoMerah/cmd";
+  const TOPIC_KUNING = "servo-kontrol/servoKuning/cmd";
+
+  const BROKER_URL = "wss://broker.hivemq.com:8884/mqtt";
+
+  const statusEl  = document.getElementById("status");
+  const btnMerah  = document.getElementById("btnMerah");
+  const btnKuning = document.getElementById("btnKuning");
+
+  const client = mqtt.connect(BROKER_URL, {
+    clientId: "web-client-" + Math.random().toString(16).slice(2)
+  });
+
+  client.on("connect", () => {
+    statusEl.textContent = "Terhubung ke broker ✔";
+    btnMerah.disabled = false;
+    btnKuning.disabled = false;
+  });
+
+  client.on("error", (err) => {
+    statusEl.textContent = "Gagal konek: " + err.message;
+  });
+
+  client.on("close", () => {
+    statusEl.textContent = "Terputus dari broker";
+    btnMerah.disabled = true;
+    btnKuning.disabled = true;
+  });
+
+  // kasih feedback visual sebentar tiap kali tombol ditekan (bukan menunggu balasan dari ESP32)
+  function flashSent(btn, colorClass) {
+    btn.classList.add("sent");
+    setTimeout(() => btn.classList.remove("sent"), 300);
+  }
+
+  btnMerah.addEventListener("click", () => {
+    client.publish(TOPIC_MERAH, "TRIGGER");
+    flashSent(btnMerah);
+  });
+
+  btnKuning.addEventListener("click", () => {
+    client.publish(TOPIC_KUNING, "TRIGGER");
+    flashSent(btnKuning);
+  });
+</script>
+
+</body>
+</html>
