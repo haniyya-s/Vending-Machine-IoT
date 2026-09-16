@@ -1,58 +1,93 @@
 #include <WiFi.h>
-#include <PubSubClient.h>
+#include <HTTPClient.h>
 #include <ESP32Servo.h>
 
 // ---------- WIFI ----------
-const char* WIFI_SSID     = "zal";
-const char* WIFI_PASSWORD = "jerapahtinggi";
+const char* WIFI_SSID     = "hani";
+const char* WIFI_PASSWORD = "hebatkan";
 
-// ---------- MQTT ----------
-const char* MQTT_BROKER    = "broker.hivemq.com";
-const int   MQTT_PORT      = 1883;
-const char* MQTT_CLIENT_ID = "esp32-servo-kontrol-2servo";
+// ---------- SERVER PHP (laptop kamu) ----------
+// Pastikan laptop & ESP32 nyambung ke WiFi yang SAMA
+const char* SERVER_IP = "172.25.19.4";
+String API_BELI = "http://" + String(SERVER_IP) + "/vending/beli.php";
 
-const char* TOPIC_MERAH  = "servo-kontrol/servoMerah/cmd";
-const char* TOPIC_KUNING = "servo-kontrol/servoKuning/cmd";
-
-WiFiClient espClient;
-PubSubClient mqttClient(espClient);
+// ID produk di database (cek di phpMyAdmin, tabel produk, kolom id)
+const int PRODUK_ID_MERAH  = 1;  // sesuai id "beng beng"
+const int PRODUK_ID_KUNING = 2;  // sesuai id "better"
 
 Servo servoMerah;
 Servo servoKuning;
 
 const int servoPin1 = 13;
-const int buttonPin1 = 14;
+const int buttonPin1 = 14;   // tombol merah
 
 const int servoPin2 = 27;
-const int buttonPin2 = 26;
+const int buttonPin2 = 26;   // tombol kuning
 
-const unsigned long PULSE_DURATION = 1000;
 const unsigned long DEBOUNCE_DELAY = 50;
 
-bool merahAktif = false;
-unsigned long merahPulseStart = 0;
 int lastButton1Reading = HIGH;
 unsigned long lastDebounce1 = 0;
 int button1State = HIGH;
 
-bool kuningAktif = false;
-unsigned long kuningPulseStart = 0;
 int lastButton2Reading = HIGH;
 unsigned long lastDebounce2 = 0;
 int button2State = HIGH;
 
+bool laporKeServer(int produkId) {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi tidak terhubung, tidak bisa lapor ke server");
+    return false;
+  }
+
+  HTTPClient http;
+  http.begin(API_BELI);
+  http.addHeader("Content-Type", "application/json");
+
+  String body = "{\"produk_id\":" + String(produkId) + "}";
+  int httpCode = http.POST(body);
+
+  bool sukses = false;
+
+  if (httpCode == 200) {
+    String response = http.getString();
+    Serial.print("Balasan server: ");
+    Serial.println(response);
+
+    if (response.indexOf("\"sukses\":true") >= 0) {
+      sukses = true;
+    }
+  } else {
+    Serial.print("Gagal hubungi server, kode HTTP: ");
+    Serial.println(httpCode);
+  }
+
+  http.end();
+  return sukses;
+}
+
 void triggerMerah() {
-  servoMerah.write(90);
-  merahAktif = true;
-  merahPulseStart = millis();
-  Serial.println("Servo merah: TRIGGER -> 90 derajat");
+  Serial.println("Tombol merah ditekan, lapor ke server...");
+  if (laporKeServer(PRODUK_ID_MERAH)) {
+    servoMerah.write(0);
+    delay(200);
+    servoMerah.write(90);
+    Serial.println("Servo merah: TRIGGER -> tetap di 90 derajat");
+  } else {
+    Serial.println("Servo merah TIDAK digerakkan (stok habis / server gagal)");
+  }
 }
 
 void triggerKuning() {
-  servoKuning.write(90);
-  kuningAktif = true;
-  kuningPulseStart = millis();
-  Serial.println("Servo kuning: TRIGGER -> 90 derajat");
+  Serial.println("Tombol kuning ditekan, lapor ke server...");
+  if (laporKeServer(PRODUK_ID_KUNING)) {
+    servoKuning.write(0);
+    delay(200);
+    servoKuning.write(90);
+    Serial.println("Servo kuning: TRIGGER -> tetap di 90 derajat");
+  } else {
+    Serial.println("Servo kuning TIDAK digerakkan (stok habis / server gagal)");
+  }
 }
 
 void setupWiFi() {
@@ -74,39 +109,6 @@ void setupWiFi() {
   } else {
     Serial.print("GAGAL connect WiFi. Status code: ");
     Serial.println(WiFi.status());
-    Serial.println("Cek lagi nama WiFi & password, lalu tekan tombol EN untuk coba ulang.");
-  }
-}
-
-void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  String message;
-  for (unsigned int i = 0; i < length; i++) message += (char)payload[i];
-
-  Serial.print("MQTT masuk [");
-  Serial.print(topic);
-  Serial.print("]: ");
-  Serial.println(message);
-
-  if (String(topic) == TOPIC_MERAH) {
-    triggerMerah();
-  } else if (String(topic) == TOPIC_KUNING) {
-    triggerKuning();
-  }
-}
-
-void reconnectMQTT() {
-  while (!mqttClient.connected()) {
-    Serial.print("Menghubungkan ke MQTT broker...");
-    if (mqttClient.connect(MQTT_CLIENT_ID)) {
-      Serial.println("berhasil!");
-      mqttClient.subscribe(TOPIC_MERAH);
-      mqttClient.subscribe(TOPIC_KUNING);
-    } else {
-      Serial.print("gagal, rc=");
-      Serial.print(mqttClient.state());
-      Serial.println(" coba lagi 3 detik lagi");
-      delay(3000);
-    }
   }
 }
 
@@ -128,18 +130,11 @@ void setup() {
   servoKuning.write(0);
 
   setupWiFi();
-  mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
-  mqttClient.setCallback(mqttCallback);
 
-  Serial.println("Sistem siap! (2 servo, mode pulse, + MQTT)");
+  Serial.println("Sistem siap! (tombol fisik + lapor otomatis ke server)");
 }
 
 void loop() {
-  if (!mqttClient.connected()) {
-    reconnectMQTT();
-  }
-  mqttClient.loop();
-
   int reading1 = digitalRead(buttonPin1);
   if (reading1 != lastButton1Reading) {
     lastDebounce1 = millis();
@@ -167,16 +162,4 @@ void loop() {
     }
   }
   lastButton2Reading = reading2;
-
-  if (merahAktif && (millis() - merahPulseStart >= PULSE_DURATION)) {
-    servoMerah.write(0);
-    merahAktif = false;
-    Serial.println("Servo merah: otomatis balik ke 0 derajat");
-  }
-
-  if (kuningAktif && (millis() - kuningPulseStart >= PULSE_DURATION)) {
-    servoKuning.write(0);
-    kuningAktif = false;
-    Serial.println("Servo kuning: otomatis balik ke 0 derajat");
-  }
 }
