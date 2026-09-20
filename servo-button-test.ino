@@ -3,26 +3,24 @@
 #include <ESP32Servo.h>
 
 // ---------- WIFI ----------
-const char* WIFI_SSID     = "hani";
-const char* WIFI_PASSWORD = "hebatkan";
+const char* WIFI_SSID     = "kampungi";
+const char* WIFI_PASSWORD = "haniyyas";
 
 // ---------- SERVER PHP (laptop kamu) ----------
-// Pastikan laptop & ESP32 nyambung ke WiFi yang SAMA
-const char* SERVER_IP = "172.25.19.4";
+const char* SERVER_IP = "10.142.45.4";
 String API_BELI = "http://" + String(SERVER_IP) + "/vending/beli.php";
 
-// ID produk di database (cek di phpMyAdmin, tabel produk, kolom id)
-const int PRODUK_ID_MERAH  = 1;  // sesuai id "beng beng"
-const int PRODUK_ID_KUNING = 2;  // sesuai id "better"
+const int PRODUK_ID_MERAH  = 1;
+const int PRODUK_ID_KUNING = 2;
 
 Servo servoMerah;
 Servo servoKuning;
 
 const int servoPin1 = 13;
-const int buttonPin1 = 14;   // tombol merah
+const int buttonPin1 = 14;
 
 const int servoPin2 = 27;
-const int buttonPin2 = 26;   // tombol kuning
+const int buttonPin2 = 26;
 
 const unsigned long DEBOUNCE_DELAY = 50;
 
@@ -135,6 +133,22 @@ void setup() {
 }
 
 void loop() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi terputus, mencoba sambung ulang...");
+    WiFi.disconnect();
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    int percobaan = 0;
+    while (WiFi.status() != WL_CONNECTED && percobaan < 20) {
+      delay(500);
+      Serial.print(".");
+      percobaan++;
+    }
+    Serial.println();
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println("WiFi tersambung ulang!");
+    }
+  }
+
   int reading1 = digitalRead(buttonPin1);
   if (reading1 != lastButton1Reading) {
     lastDebounce1 = millis();
