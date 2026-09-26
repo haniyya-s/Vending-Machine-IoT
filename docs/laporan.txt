@@ -1,0 +1,1 @@
+saya berhasil mengubah servo motor mg996r menjadi servomotor 360 derajat continuous rotation.
